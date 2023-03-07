@@ -1,5 +1,6 @@
 from datetime import datetime
 import numpy as np
+import pandas as pd
 
 def getMinMaxHeartRate(heartrateMap):
     min_heartrate = 1000
@@ -62,53 +63,36 @@ def calc_shift_len(heartrateMap, active_heartrate=100):
     return shifts
 
 
-def moving_average_exponential(arr, x):
-    i = 1
-    # Initialize an empty list to
-    # store exponential moving averages
-    moving_averages = []
+def moving_average_exponential(list, x):
+    numbers_series = pd.Series(list)
 
-    # Insert first exponential average in the list
-    moving_averages.append(arr[0])
+    # Get the moving averages of series
+    # of observations till the current time
+    moving_averages = round(numbers_series.ewm(alpha=0.5, adjust=False).mean(), 0)
 
-    # Loop through the array elements
-    while i < len(arr):
-        # Calculate the exponential
-        # average by using the formula
-        window_average = round((x * arr[i]) + (1 - x) * moving_averages[-1], 2)
+    # Convert pandas series back to list
+    return moving_averages.tolist()
 
-        # Store the cumulative average
-        # of current window in moving average list
-        moving_averages.append(window_average)
+def moving_average_cumulative(arr, window_size):
+    window_size = 3
 
-        # Shift window to right by one position
-        i += 1
+    # Convert array of integers to pandas series
+    numbers_series = pd.Series(arr)
 
-    return moving_averages
+    # Get the window of series of
+    # observations till the current time
+    windows = numbers_series.expanding()
 
-def moving_average(heartrate_list, rolling_cnt):
-    i = 0
-    # Initialize an empty list to store moving averages
-    moving_averages = []
+    # Create a series of moving averages of each window
+    moving_averages = windows.mean()
 
-    # Loop through the array to consider
-    # every window of size 3
-    while i < len(heartrate_list) - rolling_cnt + 1:
-        # Store elements from i to i+window_size
-        # in list to get the current window
-        window = heartrate_list[i: i + rolling_cnt]
+    # Convert pandas series back to list
+    return moving_averages.tolist()
 
-        # Calculate the average of current window
-        window_average = round(sum(window) / rolling_cnt, 0)
+def moving_average(list, rolling_cnt):
+    numbers_series = pd.Series(list)
 
-        # Store the average of current
-        # window in moving average list
-        moving_averages.append(window_average)
-
-        # Shift window to right by one position
-        i += 1
-
-    return moving_averages
+    return numbers_series.rolling(rolling_cnt).mean().tolist()
 
 def rising_edge(data, thresh):
     sign = data >= thresh

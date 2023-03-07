@@ -1,13 +1,29 @@
 import xml.dom.minidom
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
 
-from Healthfunctions import getMinMaxHeartRate, calc_shift_len, print_csv, moving_average, moving_average_exponential, \
-    rising_edge
+
+import pandas as pd
 
 
 def main():
-    import_file('activity_4074255082.tcx')
+    heartrate_map = import_tcx_file('activity_10630586552.tcx')
+    # loading 10 rows of the file
+    fdf = pd.DataFrame.from_dict(heartrate_map, orient='index', columns=['Heartrate', 'Speed'])
 
-def import_file(file):
+    # Sorting the two columns in ascending order
+    fdf.sort_values(["Heartrate"],
+                    axis=0,
+                    inplace=True)
+
+    heartrate_stats = fdf['Heartrate']
+    speed_stats = fdf['Speed']
+
+    plt.plot(heartrate_stats, speed_stats)
+    plt.show()
+
+def import_tcx_file(file):
     tree = xml.dom.minidom.parse(file)
     root = tree.documentElement
 
@@ -19,22 +35,20 @@ def import_file(file):
         timestamp = time.firstChild.nodeValue
 
         heartrate_bpm = trackpoint.getElementsByTagName('HeartRateBpm')
+
+        heartrate = 0
+        speed = 0
         if heartrate_bpm.length > 0:
-            heartrate = heartrate_bpm[0].getElementsByTagName('Value')[0].firstChild.nodeValue
-            heartrate_map[timestamp] = int(heartrate)
+            heartrate = int(heartrate_bpm[0].getElementsByTagName('Value')[0].firstChild.nodeValue)
 
-    min_heartrate,max_heartrate,avg_heartrate = getMinMaxHeartRate(heartrate_map)
-    #print(calc_shift_len(heartrate_map, avg_heartrate))
-
-    moving_avg_list = moving_average(list(heartrate_map.values()), 100)
-    #moving_avg_list = moving_average_exponential(list(heartrate_map.values()), .3)
-    for avg in moving_avg_list:
-        pass
-        #print(avg)
-    #print_csv(heartrate_map)
-
-    data = rising_edge(list(heartrate_map.values()), .3)
-    print(data)
+        tcx = trackpoint.getElementsByTagName('Extensions')[0].getElementsByTagName('ns3:TPX')
+        if tcx.length > 0:
+            speed_tag = tcx[0].getElementsByTagName('ns3:Speed')
+            if speed_tag.length > 0:
+                speed = float(speed_tag[0].firstChild.nodeValue)
+        if (heartrate > 0 or speed > 0):
+            heartrate_map[timestamp] = {heartrate, speed}
+    return heartrate_map
 
 
 

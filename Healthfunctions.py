@@ -70,11 +70,11 @@ def calc_shift_len_speed(trackpoint_map, active_speed=.3, seconds_inactive=5):
     print(trackpoint_map)
 
     start_time = list(trackpoint_map.keys())[0]
-    last_speed = list(trackpoint_map.values())[0]['Speed_rolling']
+    last_speed = list(trackpoint_map.values())[0]['Speed_rolling_10']
     is_new_speed_active = False
     for time, trackpoint_list in trackpoint_map.items():
         heartrate = trackpoint_list['Heartrate']
-        speed = trackpoint_list['Speed_rolling']
+        speed = trackpoint_list['Speed_rolling_10']
 
         is_old_speed_bench = last_speed <= active_speed
         is_new_speed_bench = speed <= active_speed

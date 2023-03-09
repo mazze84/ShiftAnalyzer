@@ -17,9 +17,9 @@ def main():
     df = pd.DataFrame.from_dict(trackpoint_map, orient='index', columns=['Heartrate', 'Speed', 'Distance'])
     df.index.name = "Time"
 
-    df['Heartrate_avg'] = Healthfunctions.moving_average_exponential(extract(trackpoint_map.values(), 0), alpha=0.1, decimals=0)
-    df['Heartrate_avg_rolling'] = Healthfunctions.moving_average(extract(trackpoint_map.values(), 0), 10)
-    df['Speed_rolling'] = Healthfunctions.moving_average(extract(trackpoint_map.values(), 1), 10)
+    df['Heartrate_avg_exponential'] = Healthfunctions.moving_average_exponential(extract(trackpoint_map.values(), 0), alpha=0.1, decimals=0)
+    df['Heartrate_avg_rolling_10'] = Healthfunctions.moving_average(extract(trackpoint_map.values(), 0), 10)
+    df['Speed_rolling_10'] = Healthfunctions.moving_average(extract(trackpoint_map.values(), 1), 10)
     print(df)
     df.to_csv('activity.csv', index=True, sep=';')
 
@@ -67,16 +67,17 @@ def plot_heartrate(df):
     plt.title('Heartrate')
     plt.ylabel("Heartrate")
     plt.xlabel("Time")
-    plt.plot(df.index.values, df['Heartrate'])
-    plt.plot(df.index.values, df['Heartrate_avg'])
-    plt.plot(df.index.values, df['Heartrate_avg_rolling'])
+    plt.plot(df.index.values, df['Heartrate'], label='Heartrate')
+    plt.plot(df.index.values, df['Heartrate_avg_exponential'], label='Heartrate exponential')
+    plt.plot(df.index.values, df['Heartrate_avg_rolling_10'], label='Heartrate rolling 10')
+    plt.legend()
     plt.subplot(212)
     plt.title('Speed')
-    plt.plot(df.index.values, df['Speed'])
-    plt.plot(df.index.values, df['Speed_rolling'])
-    # plt.plot(df.index.values, df['Distance'])
+    plt.plot(df.index.values, df['Speed'], label='Speed')
+    plt.plot(df.index.values, df['Speed_rolling_10'], label='Speed rolling 10')
     plt.ylabel("Speed")
     plt.xlabel("Time")
+    plt.legend()
 
 
 def import_tcx_file(file):

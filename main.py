@@ -1,4 +1,7 @@
 import xml.dom.minidom
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
 import matplotlib
 
 from datetime import datetime
@@ -6,48 +9,54 @@ from datetime import datetime
 import Healthfunctions
 
 matplotlib.use('TkAgg')
-import matplotlib.pyplot as plt
-import pandas as pd
-
 
 def main():
-    trackpoint_map = import_tcx_file('activity_10630586552.tcx')
+    trackpoints = import_tcx_file('activity_10630586552.tcx')
 
     # loading 10 rows of the file
-    df = pd.DataFrame.from_dict(trackpoint_map, orient='index', columns=['Heartrate', 'Speed', 'Distance'])
+    df = pd.DataFrame.from_dict(trackpoints, orient='index', columns=['Heartrate', 'Speed', 'Distance'])
     df.index.name = "Time"
-
-    df['Heartrate_avg_exponential'] = Healthfunctions.moving_average_exponential(extract(trackpoint_map.values(), 0), alpha=0.1, decimals=0)
-    df['Heartrate_avg_rolling_10'] = Healthfunctions.moving_average(extract(trackpoint_map.values(), 0), 10)
-    df['Speed_rolling_10'] = Healthfunctions.moving_average(extract(trackpoint_map.values(), 1), 10)
-    print(df)
-    df.to_csv('activity.csv', index=True, sep=';')
-
+    df['Heartrate_avg_exponential'] = Healthfunctions.moving_average_exponential(extract(trackpoints.values(), 0), alpha=0.1, decimals=0)
+    df['Heartrate_avg_rolling_10'] = Healthfunctions.moving_average(extract(trackpoints.values(), 0), 10)
+    df['Speed_rolling_10'] = Healthfunctions.moving_average(extract(trackpoints.values(), 1), 10)
+    df['Speed_rolling_10'] = Healthfunctions.moving_average(extract(trackpoints.values(), 1), 10)
+    df['deltaT'] = df.index.to_series().diff().dt.seconds.div(60, fill_value=0)
+    df.set_index('deltaT')
+    #df.to_csv('activity.csv', index=True, sep=';')
+    df.sort_values(["Time"], axis=0, inplace=True)
+    print(df.head())
     activity_map = df.to_dict('index')
 
     shifts = Healthfunctions.calc_shift_len_speed(activity_map)
 
+
     # print(avg_dataframe)
     # Sorting the columns in ascending order
-    df.sort_values(["Time"], axis=0, inplace=True)
     plot_heartrate(df)
-    df_shifts = pd.DataFrame.from_dict(shifts, orient='index', columns=['Starttime', 'Endtime', 'AverageHeartRate', 'AverageSpeed', 'Duration', 'Active'])
-    print(df_shifts)
-
-    #plot_shifts(shifts)
+    df_shifts = pd.DataFrame(shifts, columns=['Starttime', 'Endtime', 'AverageHeartRate', 'AverageSpeed', 'Duration', 'Active'])
+    print(df_shifts.head())
+    df_shifts.to_csv('shifts.csv', sep=';')
+    #plot_shifts(df_shifts)
     plt.show()
 
 
 def plot_shifts(df_shifts):
-    #plt.figure(2)
 
-    plt.plot(df_shifts.index.values, df_shifts['Starttime'])
-    plt.plot(df_shifts.index.values, df_shifts['Endtime'])
-    plt.plot(df_shifts.index.values, df_shifts['AverageHeartRate'])
-    plt.plot(df_shifts.index.values, df_shifts['AverageSpeed'])
-    plt.plot(df_shifts.index.values, df_shifts['Duration'])
-    plt.ylabel("Heartrate")
-    plt.xlabel("Shift")
+    fig, ax = plt.subplots()
+
+    ax.set_ylabel('Time')
+    ax.set_title('Shifts')
+    #ax.set_xticks(df_shifts['Duration'], df_shifts['Duration'])
+    ax.bar(df_shifts['Duration'], df_shifts['AverageHeartRate'])
+    plt.show()
+
+
+    #plt.plot(df_shifts.index.values, df_shifts['AverageHeartRate'])
+    #plt.plot(df_shifts.index.values, df_shifts['Duration'])
+    #plt.plot(df_shifts.index.values, df_shifts['Starttime'])
+    #plt.plot(df_shifts.index.values, df_shifts['Endtime'])
+
+    #plt.plot(df_shifts.index.values, df_shifts['Active'])
 
 
 def plot_shift_bar(df_shifts):
@@ -62,23 +71,36 @@ def plot_shift_bar(df_shifts):
 
 
 def plot_heartrate(df):
-    plt.figure(1)
-    plt.subplot(211)
+    min_hr, max_hr, avg_hr = Healthfunctions.get_min_max_avg(df['Heartrate'], 'Heartrate')
+    min_speed, max_speed, avg_speed = Healthfunctions.get_min_max_avg(df['Speed'], 'Speed')
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
     plt.title('Heartrate')
     plt.ylabel("Heartrate")
     plt.xlabel("Time")
-    plt.plot(df.index.values, df['Heartrate'], label='Heartrate')
-    plt.plot(df.index.values, df['Heartrate_avg_exponential'], label='Heartrate exponential')
-    plt.plot(df.index.values, df['Heartrate_avg_rolling_10'], label='Heartrate rolling 10')
-    plt.legend()
-    plt.subplot(212)
-    plt.title('Speed')
-    plt.plot(df.index.values, df['Speed'], label='Speed')
-    plt.plot(df.index.values, df['Speed_rolling_10'], label='Speed rolling 10')
-    plt.ylabel("Speed")
-    plt.xlabel("Time")
-    plt.legend()
+    plt.axhline(y=max_hr, color='r', linestyle='--', label='Max heartrate')
+    plt.axhline(y=avg_hr, color='b', linestyle='--', label='Avg heartrate')
+    plt.axhline(y=min_hr, color='r', linestyle='--', label='Min heartrate')
 
+    lst = df.get('Heartrate_avg_exponential')
+    ax.plot(df.index.values, df['Heartrate'], color='r', label='Heartrate')
+    ax.plot(df.index.values, df['Heartrate_avg_exponential'], color='r', label='Heartrate exponential')
+    #ax.fill_between(df.keys(), min_hr, df.get('Heartrate_avg_exponential'), alpha=0.7)
+    ax.plot(df.index.values, df['Heartrate_avg_rolling_10'], label='Heartrate rolling 10')
+    ax.legend(loc=0)
+
+    ax.set_ylim(0, max_hr)
+
+    #plt.subplot(212)
+    #plt.title('Speed')
+    ax2 = ax.twinx()
+    #ax2.plot(df.index.values, df['Speed'], label='Speed')
+    ax2.plot(df['Speed_rolling_10'], color='b', label='Speed rolling 10')
+    #plt.ylabel("Speed")
+    #plt.xlabel("Time")
+    ax2.legend(loc=0)
+    ax2.set_ylim(0, 10)
 
 def import_tcx_file(file):
     tree = xml.dom.minidom.parse(file)

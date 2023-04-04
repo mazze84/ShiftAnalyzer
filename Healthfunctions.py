@@ -1,14 +1,17 @@
 from datetime import datetime
 import numpy as np
 import pandas as pd
+from scipy.signal import find_peaks
+from statsmodels.tsa.arima.model import ARIMA
+from sklearn.linear_model import LinearRegression
+import ruptures as rpt
 
-
-def get_min_max_avg(heartrates, feature):
+def get_min_max_avg(data):
     min_heartrate = 1000
     max_heartrate = 0
     avg = 0
     cnt = 0
-    for time, trackpoint in heartrates.items():
+    for time, trackpoint in data.items():
         heartrate = trackpoint
         avg += heartrate
         cnt += 1
@@ -19,6 +22,11 @@ def get_min_max_avg(heartrates, feature):
     avg = calc_avg(avg, cnt)
     return min_heartrate, max_heartrate, avg
 
+
+def get_peaks(df):
+    smoothed = df['Heartrate_avg_rolling_10']
+    peaks, _ = find_peaks(smoothed, height=np.mean(smoothed), distance=10)
+    return peaks
 
 def calc_avg(heartrate, cnt, decimals=0):
     avg = 0
@@ -116,6 +124,103 @@ def calc_shift_len_speed(trackpoints, active_speed=.3, seconds_inactive=5):
     shifts.append([start_time, list(trackpoints.keys())[-1], calc_avg(avg_heartrate, heartrate_cnt), calc_avg(avg_speed, heartrate_cnt, decimals=2), duration_last_shift, (not is_old_speed_active)])
     return shifts
 
+def detect_time_series_change(df):
+    heartrates = df['Heartrate_avg_rolling_10'].to_numpy()
+    # Detect the change points
+    algo = rpt.Pelt(model="rbf").fit(heartrates)
+    change_location = algo.predict(pen=30)
+    return change_location
+
+def calc_rising_falling_heartrates(df):
+    rolling_10 = df['Heartrate_avg_rolling_10'].tolist()
+    diff = np.diff(rolling_10)
+
+    # Find the indices where the heart rate is rising and falling
+    rising = np.where(diff > 0)[0]
+    falling = np.where(diff < 0)[0]
+
+    diff_sum = 0
+    sum = []
+    time = df.index.values[0]
+
+    for i in range(len(diff)):
+        difference = diff[i]
+        if difference > 0.0 and diff_sum >= 0.0 or difference < 0.0 and diff_sum <= 0.0:
+            diff_sum += difference
+        elif diff_sum < 30.0 and diff_sum > -30.0:
+            # change is not significant enough
+            diff_sum += difference
+        else:
+            sum.append({time, diff_sum})
+            time = df.index.values[i]
+            diff_sum = difference
+    print(sum)
+
+    return rising, falling, sum
+
+def combine_peak_with_rising_falling(df):
+    # Find peaks in the heart rate data
+    peaks, _ = find_peaks(df['Heartrate'])
+
+    # Calculate the difference between consecutive heart rate values
+    diff = np.diff(df['Heartrate'])
+
+    # Find the indices where the heart rate is rising and falling
+    rising = np.where(diff > 0)[0]
+    falling = np.where(diff < 0)[0]
+
+    # Filter the detected peaks to only keep those that occur during rising or falling heart rate segments
+    rising_peaks = []
+    falling_peaks = []
+    for peak in peaks:
+        if np.any((rising <= peak) & (falling > peak)):
+            rising_peaks.append(peak)
+        elif np.any((falling <= peak) & (rising > peak)):
+            falling_peaks.append(peak)
+
+    # Plot the heart rate data with rising and falling segments and detected peaks marked
+    import matplotlib.pyplot as plt
+
+    plt.plot(df['timestamp'], df['Heartrate'])
+    plt.plot(df.index.values[rising], df['Heartrate'][rising], 'g')
+    plt.plot(df.index.values[falling], df['Heartrate'][falling], 'r')
+    plt.plot(df.index.values[rising_peaks], df['Heartrate'][rising_peaks], 'x', color='green')
+    plt.plot(df.index.values[falling_peaks], df['Heartrate'][falling_peaks], 'x', color='red')
+    plt.show()
+
+def regression():
+    # Load heart rate data into a pandas dataframe
+    heart_rate_data = pd.read_csv("heart_rate_data.csv")
+
+    # Define the independent variable (heart rate) and dependent variable (shift length)
+    X = heart_rate_data["heart_rate"].values.reshape(-1, 1)
+    y = heart_rate_data["shift_length"].values.reshape(-1, 1)
+
+    # Fit a linear regression model to the data
+    regressor = LinearRegression()
+    regressor.fit(X, y)
+
+    # Use the model to predict shift length for new heart rate data
+    new_heart_rate_data = pd.read_csv("new_heart_rate_data.csv")
+    new_X = new_heart_rate_data["heart_rate"].values.reshape(-1, 1)
+    predicted_shift_length = regressor.predict(new_X)
+def arima():
+
+    # Load heart rate data into a pandas dataframe
+    heart_rate_data = pd.read_csv("heart_rate_data.csv")
+
+    # Define the independent variable (heart rate) and dependent variable (shift length)
+    X = heart_rate_data["heart_rate"].values
+    y = heart_rate_data["shift_length"].values
+
+    # Fit an ARIMA model to the data
+    model = ARIMA(y, order=(1, 1, 1))
+    results = model.fit()
+
+    # Use the model to predict shift length for new heart rate data
+    new_heart_rate_data = pd.read_csv("new_heart_rate_data.csv")
+    new_X = new_heart_rate_data["heart_rate"].values
+    predicted_shift_length = results.forecast(len(new_X))[0]
 
 def moving_average_exponential(lst, alpha=0.3, decimals=2):
     numbers_series = pd.Series(lst)
